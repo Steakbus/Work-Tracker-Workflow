@@ -607,7 +607,7 @@ def write_snapshot():
     phases = "".join(
         f'<div class="phase"><span>{esc(p["name"])}'
         + (f' <span class="muted small">· {p["target_date"]}</span>' if p["target_date"] else "")
-        + f'</span><span class="small">{"Released" if p["released_at"] else f"{p['done']}/{p['total']}"}</span>'
+        + f'</span><span class="small">{"Released" if p["released_at"] else "%d/%d" % (p["done"], p["total"])}</span>'
         f'<div class="bar"><div style="width: {round(100 * p["done"] / p["total"]) if p["total"] else 0}%"></div></div></div>'
         for p in phases_with_progress())
     phase_names = {p["id"]: p["name"] for p in phases_with_progress()}
@@ -625,10 +625,9 @@ def write_snapshot():
         time_ = T.fmt_dur(c["tracked_seconds"]) if c["tracked_seconds"] else ""
         if c["estimate"]:
             time_ += f' <span class="muted">/ {T.fmt_dur(c["estimate"])}</span>'
-        checks = c["checklist"]
+        checks = "".join(f'<li>{"☑" if i["done"] else "☐"} {esc(i["text"])}</li>' for i in c["checklist"])
         body = (f'<p>{esc(c["description"])}</p>' if c["description"] else "") + (
-            f'<ul>{"".join(f"<li>{"☑" if i["done"] else "☐"} {esc(i["text"])}</li>" for i in checks)}</ul>'
-            if checks else "")
+            f'<ul>{checks}</ul>' if checks else "")
         return (f'<details class="item"><summary><span>{"<span class=dot>● </span>" if c["running"] else ""}'
                 f'{esc(c["title"])}</span><span class="small">{time_}</span>'
                 + (f'<span class="meta">{meta}</span>' if meta else "")

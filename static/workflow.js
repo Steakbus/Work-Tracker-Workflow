@@ -794,8 +794,13 @@
     menu.style.left = Math.max(8, Math.min(x, viewW - w - 8)) + "px";
     menu.style.top = Math.max(8, Math.min(y, window.innerHeight - h - 8)) + "px";
   }
+  let closedFor = "";  // what the last press outside closed: a right click on the same card shouldn't reopen it
   document.addEventListener("mousedown", (e) => {
-    if (!menu.hidden && !menu.contains(e.target) && !e.target.closest('[data-act="col-menu"], #wf-filter-btn')) menu.hidden = true;
+    closedFor = "";
+    if (!menu.hidden && !menu.contains(e.target) && !e.target.closest('[data-act="col-menu"], #wf-filter-btn')) {
+      closedFor = menu.dataset.for;
+      menu.hidden = true;
+    }
   });
   $("wf-board").addEventListener("scroll", () => (menu.hidden = true), true);
 
@@ -806,6 +811,7 @@
     const node = e.target.closest(".wf-card");
     if (node) {
       e.preventDefault();
+      if (closedFor === "card:" + node.dataset.id) return;  // right click on the card whose menu is open: just close it
       return openCardMenu(cardById(Number(node.dataset.id)), e.clientX, e.clientY);
     }
     const col = e.target.closest(".wf-col");
@@ -835,19 +841,26 @@
       <button class="btn link" data-a="archive">Archive</button>
       <button class="btn link" data-a="delete" style="color:var(--danger)">Delete</button>`;
     menu.onkeydown = null;
+    /** After an edit: reload, then redraw the menu in place with the card's new values (unless it was closed meanwhile). */
+    const stayOpen = async () => {
+      const forThis = "card:" + card.id;
+      await load();
+      const fresh = cardById(card.id);
+      if (!menu.hidden && menu.dataset.for === forThis && fresh) openCardMenu(fresh, parseFloat(menu.style.left), parseFloat(menu.style.top));
+    };
     const phaseSel = menu.querySelector('select[data-a="phase"]');
     if (phaseSel) phaseSel.value = card.phase_id || "";
     menu.onchange = attempt(async (e) => {
       if (e.target !== phaseSel) return;
-      menu.hidden = true;
       await api("PATCH", `/api/workflow/cards/${card.id}`, { phase_id: Number(phaseSel.value) || null });
-      await load();
+      await stayOpen();
     });
     menu.onclick = attempt(async (e) => {
       const btn = e.target.closest("button[data-a]");
       if (!btn) return;
-      menu.hidden = true;
       const a = btn.dataset.a;
+      const stays = ["move", "prio", "type"].includes(a);  // edits keep the menu open for the next one
+      if (!stays) menu.hidden = true;
       if (a === "open") return openCard(card.id);
       if (a === "timer") return toggleTimer(card);
       if (a === "move") {
@@ -870,10 +883,12 @@
         if (!await ask(`Delete “${card.title}”?`, "The card is gone for good. Its tracked time stays in the tracker.")) return;
         await api("DELETE", `/api/workflow/cards/${card.id}`);
       }
-      await load();
+      if (stays) await stayOpen();
+      else await load();
       if (card.running && !["prio", "type", "duplicate"].includes(a)) trackerRefresh();  // a done column or archive takes the timer off the card
     });
     showMenuAt(x, y);
+    menu.dataset.for = "card:" + card.id;
   }
 
   // ---------------------------------------------------------- filters, archive view
