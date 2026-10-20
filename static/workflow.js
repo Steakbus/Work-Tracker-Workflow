@@ -709,6 +709,7 @@
     const position = before ? ids.indexOf(Number(before.dataset.id))
       : after ? ids.indexOf(Number(after.dataset.id)) + 1 : ids.length;
     const id = dragId;
+    dragId = null;  // renderBoard() below detaches the dragged node, so its dragend never reaches the board
     const card = cardById(id);
     const wasRunning = card.running;
     // Show the result right away, then sync.
@@ -724,7 +725,8 @@
 
   // ---------------------------------------------------------- column menu
 
-  function openColumnMenu(button, colId) {
+  /** The column menu, under its ⋯ button or at (x, y) for a right click. */
+  function openColumnMenu(button, colId, x, y) {
     const col = columnById(colId);
     const count = cardsIn(colId).length;
     let color = col.color;
@@ -775,8 +777,10 @@
       await load();
     });
     menu.hidden = false;  // so it can be measured
-    const r = button.getBoundingClientRect();
-    showMenuAt(r.right - menu.offsetWidth, r.bottom + 4);
+    if (button) {
+      const r = button.getBoundingClientRect();
+      showMenuAt(r.right - menu.offsetWidth, r.bottom + 4);
+    } else showMenuAt(x, y);
     menu.querySelector('[data-f="name"]').focus();
   }
 
@@ -795,13 +799,19 @@
   });
   $("wf-board").addEventListener("scroll", () => (menu.hidden = true), true);
 
-  // ---------------------------------------------------------- card menu (right click)
+  // ---------------------------------------------------------- card and column menus (right click)
 
   $("wf-board").addEventListener("contextmenu", (e) => {
+    if (dragId !== null || colDragId !== null || e.target.closest("input, textarea, select")) return;
     const node = e.target.closest(".wf-card");
-    if (!node || dragId !== null) return;
+    if (node) {
+      e.preventDefault();
+      return openCardMenu(cardById(Number(node.dataset.id)), e.clientX, e.clientY);
+    }
+    const col = e.target.closest(".wf-col");
+    if (!col) return;
     e.preventDefault();
-    openCardMenu(cardById(Number(node.dataset.id)), e.clientX, e.clientY);
+    openColumnMenu(null, Number(col.dataset.col), e.clientX, e.clientY);
   });
 
   function openCardMenu(card, x, y) {
